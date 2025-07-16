@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tesla Vehicle Data and Order Links</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #results-container {
+            margin-top: 20px;
+        }
+        .tesla-vehicle {
+            margin: 15px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .tesla-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 15px;
+            background-color: #dc3545;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .tesla-link:hover {
+            background-color: #c82333;
+        }
+        .vehicle-info {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        #error-message {
+            color: red;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Tesla Vehicle Data and Order Links</h1>
+    <p>Click the button to fetch Tesla vehicle data and generate order links.</p>
+    
+    <button id="fetch-button">Fetch Tesla Data</button>
+
+    <div id="loading-message" style="display: none;">Loading...</div>
+    
+    <!-- The generated links will be placed here -->
+    <div id="results-container"></div>
+    
+    <!-- An error message will be displayed here if something goes wrong -->
+    <p id="error-message"></p>
+
+    <!-- JSON Response Display -->
+    <div id="json-response-container" style="margin-top: 30px;">
+        <h2>API Response (JSON)</h2>
+        <pre id="json-response" style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 12px; border: 1px solid #ddd;">Click "Fetch Tesla Data" to see the API response here...</pre>
+    </div>
+
+<script>
+    // Get references to the HTML elements we will interact with
+    const fetchButton = document.getElementById('fetch-button');
+    const resultsContainer = document.getElementById('results-container');
+    const errorMessage = document.getElementById('error-message');
+    const loadingMessage = document.getElementById('loading-message');
+    const jsonResponseContainer = document.getElementById('json-response-container');
+    const jsonResponse = document.getElementById('json-response');
+
+    // This is the core function that fetches Tesla data and creates order links
+    async function fetchTeslaData() {
+        // --- PREPARATION ---
+        // Clear previous results and show loading message
+        errorMessage.textContent = '';
+        resultsContainer.innerHTML = '';
+        loadingMessage.style.display = 'block';
+
+        // Use our proxy server instead of direct Tesla API
+        const proxyApiUrl = 'http://localhost:3001/api/tesla-inventory';
+        
+        try {
+            // --- STEP 1: FETCH THE TESLA DATA VIA PROXY ---
+            const response = await fetch(proxyApiUrl);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            // --- STEP 2: PARSE THE JSON RESPONSE ---
+            const teslaData = await response.json();
+            console.log('Tesla API Response:', teslaData);
+
+            // Display the JSON response at the bottom of the page
+            jsonResponse.textContent = JSON.stringify(teslaData, null, 2);
+
+            // --- STEP 3: PROCESS EACH VEHICLE AND CREATE LINKS ---
+            if (teslaData.results && teslaData.results.length > 0) {
+                teslaData.results.forEach((vehicle, index) => {
+                    createVehicleElement(vehicle, index + 1);
+                });
+            } else {
+                // Don't show error if no results, just don't show anything
+                console.log('No vehicles found in the response');
+                jsonResponse.textContent = 'No vehicles found in the API response.';
+            }
+
+        } catch (error) {
+            console.error('Failed to fetch Tesla data:', error);
+            
+            // Check if it's a CORS error
+            if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+                errorMessage.textContent = 'CORS error: Cannot fetch data directly from Tesla API due to browser security restrictions. You need to use a proxy server or backend API to fetch this data.';
+                jsonResponse.textContent = 'Error: CORS policy blocks direct API access from browser.\n\nTo fix this, you need to:\n1. Use a backend server to proxy the requests\n2. Use a CORS proxy service\n3. Or access the Tesla API from a server environment\n\nDirect browser requests to Tesla API are blocked for security reasons.';
+            } else {
+                errorMessage.textContent = `Could not fetch Tesla data. Error: ${error.message}`;
+                jsonResponse.textContent = `Error fetching data: ${error.message}`;
+            }
+        } finally {
+            loadingMessage.style.display = 'none';
+        }
+    }
+
+    // Function to create a vehicle element with its order link
+    function createVehicleElement(vehicle, vehicleNumber) {
+        // Extract paint information
+        const paintInfo = vehicle.PAINT ? vehicle.PAINT[0] : 'Unknown';
+        const paintOption = vehicle.OptionCodeData?.find(option => option.group === 'PAINT');
+        const paintName = paintOption ? paintOption.description : paintInfo;
+
+        // Extract hash
+        const hash = vehicle.Hash;
+        
+        // Create the Tesla order URL
+        const orderUrl = `https://www.tesla.com/tr_TR/my/order/XP7Y264_${hash}?titleStatus=new&redirect=no#overview`;
+
+        // Create the HTML structure for this vehicle
+        const vehicleDiv = document.createElement('div');
+        vehicleDiv.className = 'tesla-vehicle';
+        
+        vehicleDiv.innerHTML = `
+            <div class="vehicle-info">Vehicle ${vehicleNumber}</div>
+            <div><strong>Paint:</strong> ${paintName}</div>
+            <div><strong>Model:</strong> ${vehicle.TrimName || 'Model Y'}</div>
+            <div><strong>Price:</strong> ${vehicle.TotalPrice?.toLocaleString()} ${vehicle.CurrencyCode}</div>
+            <div><strong>Hash:</strong> ${hash}</div>
+            <a href="${orderUrl}" class="tesla-link" target="_blank">View Tesla Order</a>
+        `;
+
+        resultsContainer.appendChild(vehicleDiv);
+    }
+
+    // Add a click event listener to the button to run our function
+    fetchButton.addEventListener('click', fetchTeslaData);
+
+</script>
+
+</body>
+</html>
